@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devgate-notification-service
+  namespace: devgate
+  labels:
+    app: devgate-notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devgate-notification-service
+  template:
+    metadata:
+      labels:
+        app: devgate-notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: devgate/notification-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: devgate_notifications
+            - name: POSTGRES_USERNAME
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: POSTGRES_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: guest
+            - name: RABBITMQ_PASSWORD
+              value: guest
+            - name: JWT_SECRET_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: JWT_SECRET_BASE64
+          readinessProbe:
+            tcpSocket:
+              port: 8086
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8086
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devgate-notification-service
+  namespace: devgate
+  labels:
+    app: devgate-notification-service
+spec:
+  selector:
+    app: devgate-notification-service
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086

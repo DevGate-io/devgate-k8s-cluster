@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devgate-user-service
+  namespace: devgate
+  labels:
+    app: devgate-user-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devgate-user-service
+  template:
+    metadata:
+      labels:
+        app: devgate-user-service
+    spec:
+      containers:
+        - name: user-service
+          image: devgate/user-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: users
+            - name: POSTGRES_USERNAME
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: POSTGRES_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: guest
+            - name: RABBITMQ_PASSWORD
+              value: guest
+            - name: JWT_SECRET_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: JWT_SECRET_BASE64
+            - name: CORS_ALLOWED_ORIGINS
+              value: "http://localhost:3000,http://app.devgate.local"
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devgate-user-service
+  namespace: devgate
+  labels:
+    app: devgate-user-service
+spec:
+  selector:
+    app: devgate-user-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081

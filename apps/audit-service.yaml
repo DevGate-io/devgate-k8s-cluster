@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devgate-audit-service
+  namespace: devgate
+  labels:
+    app: devgate-audit-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devgate-audit-service
+  template:
+    metadata:
+      labels:
+        app: devgate-audit-service
+    spec:
+      containers:
+        - name: audit-service
+          image: devgate/audit-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: audit
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: POSTGRES_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: guest
+            - name: RABBITMQ_PASSWORD
+              value: guest
+          readinessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devgate-audit-service
+  namespace: devgate
+  labels:
+    app: devgate-audit-service
+spec:
+  selector:
+    app: devgate-audit-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082

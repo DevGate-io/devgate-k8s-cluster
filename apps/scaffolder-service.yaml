@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devgate-scaffolder-service
+  namespace: devgate
+  labels:
+    app: devgate-scaffolder-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devgate-scaffolder-service
+  template:
+    metadata:
+      labels:
+        app: devgate-scaffolder-service
+    spec:
+      containers:
+        - name: scaffolder-service
+          image: devgate/scaffolder-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: devgate_scaffolder
+            - name: POSTGRES_USERNAME
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: POSTGRES_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: guest
+            - name: RABBITMQ_PASSWORD
+              value: guest
+            - name: JWT_SECRET_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: JWT_SECRET_BASE64
+            - name: INTEGRATION_SERVICE_URL
+              value: http://devgate-integration-service:8083
+            - name: CATALOG_SERVICE_URL
+              value: http://devgate-catalog-service:8084
+          readinessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devgate-scaffolder-service
+  namespace: devgate
+  labels:
+    app: devgate-scaffolder-service
+spec:
+  selector:
+    app: devgate-scaffolder-service
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 8085

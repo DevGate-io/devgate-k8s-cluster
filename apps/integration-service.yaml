@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devgate-integration-service
+  namespace: devgate
+  labels:
+    app: devgate-integration-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devgate-integration-service
+  template:
+    metadata:
+      labels:
+        app: devgate-integration-service
+    spec:
+      containers:
+        - name: integration-service
+          image: devgate/integration-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: devgate_integrations
+            - name: POSTGRES_USERNAME
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: POSTGRES_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: guest
+            - name: RABBITMQ_PASSWORD
+              value: guest
+            - name: JWT_SECRET_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: JWT_SECRET_BASE64
+            - name: INTEGRATION_CREDENTIALS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devgate-secrets
+                  key: INTEGRATION_CREDENTIALS_KEY
+            - name: PUBLIC_GATEWAY_URL
+              value: http://api.devgate.gateway.local
+          readinessProbe:
+            tcpSocket:
+              port: 8083
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8083
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devgate-integration-service
+  namespace: devgate
+  labels:
+    app: devgate-integration-service
+spec:
+  selector:
+    app: devgate-integration-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083

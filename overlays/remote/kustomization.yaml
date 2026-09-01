@@ -1,0 +1,67 @@
+# Оверлей для развёртывания на удалённом кластере (k3s и подобные).
+#
+# Перед применением:
+#   1. Замените REGISTRY_URL и TAG на реальные значения
+#      (например: ghcr.io/<user>, registry.example.com/devgate; TAG — версия из пуша).
+#   2. Замените dev-значения в 10-secrets.yaml (или уберите файл из resources
+#      и создайте Secret на кластере вручную).
+#   3. Для приватного registry раскомментируйте imagePullSecrets-патч ниже.
+#
+# Применение (REGISTRY/TAG подставляются из переменных make):
+#   make -C k8s deploy-remote REGISTRY=registry.example.com/devgate TAG=1.0.0
+# или вручную:
+#   kubectl kustomize --load-restrictor LoadRestrictionsNone k8s/overlays/remote | kubectl apply -f -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../00-namespace.yaml
+  - ../../10-secrets.yaml
+  - ../../infra/postgres.yaml
+  - ../../infra/rabbitmq.yaml
+  - ../../apps/user-service.yaml
+  - ../../apps/audit-service.yaml
+  - ../../apps/integration-service.yaml
+  - ../../apps/catalog-service.yaml
+  - ../../apps/scaffolder-service.yaml
+  - ../../apps/notification-service.yaml
+  - ../../apps/frontend.yaml
+  - ../../gateway/nginx-configmap.yaml
+  - ../../gateway/gateway.yaml
+
+images:
+  - name: devgate/user-service
+    newName: REGISTRY_URL/devgate-user-service
+    newTag: "TAG"
+  - name: devgate/audit-service
+    newName: REGISTRY_URL/devgate-audit-service
+    newTag: "TAG"
+  - name: devgate/integration-service
+    newName: REGISTRY_URL/devgate-integration-service
+    newTag: "TAG"
+  - name: devgate/catalog-service
+    newName: REGISTRY_URL/devgate-catalog-service
+    newTag: "TAG"
+  - name: devgate/scaffolder-service
+    newName: REGISTRY_URL/devgate-scaffolder-service
+    newTag: "TAG"
+  - name: devgate/notification-service
+    newName: REGISTRY_URL/devgate-notification-service
+    newTag: "TAG"
+  - name: devgate/frontend
+    newName: REGISTRY_URL/devgate-frontend
+    newTag: "TAG"
+
+# Приватный registry: создайте секрет и раскомментируйте патч.
+#   kubectl -n devgate create secret docker-registry registry-credentials \
+#     --docker-server=REGISTRY_URL --docker-username=USER --docker-password=TOKEN
+# Postgres и RabbitMQ используют публичные образы (postgres:16-alpine,
+# rabbitmq:4-management), pull-секрет им не нужен — патч касается только Deployment'ов.
+# patches:
+#   - target:
+#       kind: Deployment
+#     patch: |-
+#       - op: add
+#         path: /spec/template/spec/imagePullSecrets
+#         value:
+#           - name: registry-credentials

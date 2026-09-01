@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-nginx-conf
+  namespace: devgate
+data:
+  default.conf: |
+    # DNS кластера (CoreDNS): имена апстримов — это Service-объекты в namespace devgate.
+    # Используются FQDN: nginx-резолвер не применяет search-домены из /etc/resolv.conf,
+    # поэтому короткое имя (devgate-user-service) не резолвится и отдаёт 502.
+    resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;
+    resolver_timeout 5s;
+
+    server {
+        listen 80;
+        server_name api.devgate.gateway.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location ~ ^/(users|auth|teams) {
+            set $user_service devgate-user-service.devgate.svc.cluster.local;
+            proxy_pass http://$user_service:8081$request_uri;
+        }
+
+        location ~ ^/audit {
+            set $audit_service devgate-audit-service.devgate.svc.cluster.local;
+            proxy_pass http://$audit_service:8082$request_uri;
+        }
+
+        location ~ ^/integrations {
+            set $integration_service devgate-integration-service.devgate.svc.cluster.local;
+            proxy_pass http://$integration_service:8083$request_uri;
+        }
+
+        location ~ ^/(projects|services) {
+            set $catalog_service devgate-catalog-service.devgate.svc.cluster.local;
+            proxy_pass http://$catalog_service:8084$request_uri;
+        }
+
+        location ~ ^/templates {
+            set $scaffolder_service devgate-scaffolder-service.devgate.svc.cluster.local;
+            proxy_pass http://$scaffolder_service:8085$request_uri;
+        }
+
+        location ~ ^/(notifications|subscriptions) {
+            set $notification_service devgate-notification-service.devgate.svc.cluster.local;
+            proxy_pass http://$notification_service:8086$request_uri;
+        }
+
+        # Явно возвращаем 404 для всех остальных путей
+        location / {
+            return 404;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.users.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        location / {
+            set $user_service devgate-user-service.devgate.svc.cluster.local;
+            proxy_pass http://$user_service:8081$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.audit.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location / {
+            set $audit_service devgate-audit-service.devgate.svc.cluster.local;
+            proxy_pass http://$audit_service:8082$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.integrations.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location / {
+            set $integration_service devgate-integration-service.devgate.svc.cluster.local;
+            proxy_pass http://$integration_service:8083$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.catalog.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location / {
+            set $catalog_service devgate-catalog-service.devgate.svc.cluster.local;
+            proxy_pass http://$catalog_service:8084$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.scaffolder.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location / {
+            set $scaffolder_service devgate-scaffolder-service.devgate.svc.cluster.local;
+            proxy_pass http://$scaffolder_service:8085$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name api.devgate.notifications.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+
+        location / {
+            set $notification_service devgate-notification-service.devgate.svc.cluster.local;
+            proxy_pass http://$notification_service:8086$request_uri;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name app.devgate.local;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+
+        location / {
+            set $frontend devgate-frontend.devgate.svc.cluster.local;
+            proxy_pass http://$frontend:3000;
+        }
+    }

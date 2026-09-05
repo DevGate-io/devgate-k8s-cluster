@@ -8,7 +8,7 @@ SHELL := /bin/bash
 K8S_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 ROOT            := $(abspath $(K8S_DIR)/..)
 PROFILE         ?= devgate
-MINIKUBE_FLAGS  ?= --driver=docker --cpus=4 --memory=8192
+MINIKUBE_FLAGS  ?= --driver=docker --cpus=8 --memory=8192
 REGISTRY        ?= registry.example.com/devgate
 TAG             ?= 1.0.0
 
@@ -31,8 +31,33 @@ define build-spring-loop
 	done
 endef
 
+define check-status-or-cluster-up
+	@minikube --profile $(PROFILE) status >/dev/null 2>&1 || $(MAKE) --no-print-directory cluster-up
+endef
+
+define use-context
+	kubectl config use-context $(PROFILE)
+endef
+
+define wait-for-pods
+	@echo; echo ">>> Ждём готовности подов (до 5 минут)..."
+	@kubectl -n devgate wait --for=condition=Ready pods --all --timeout=300s || true
+endef
+
+define print-pods
+	@echo kubectl -n devgate get pods,svc
+	@echo; echo ">>> Далее: /etc/hosts и 'make -C k8s tunnel' (см. k8s/README.md)"
+endef
+
+define apply-infra
+	kubectl apply -f $(K8S_DIR)00-namespace.yaml \
+	              -f $(K8S_DIR)10-secrets.yaml \
+	              -f $(K8S_DIR)infra \
+	              -f $(K8S_DIR)gateway
+endef
+
 .PHONY: help cluster-up cluster-down build build-local push deploy deploy-remote \
-	tunnel status logs rabbitmq-ui down clean
+	tunnel status logs rabbitmq-ui down clean deploy-backend
 
 help: ## Список целей
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(K8S_DIR)Makefile | \
@@ -70,19 +95,26 @@ push: build-local ## Собрать и запушить образы в registry
 		docker push $(REGISTRY)/$$img:$(TAG); \
 	done
 
+deploy-backend:
+	$(check-status-or-cluster-up)
+	$(use-context)
+
+	$(apply-infra)
+	kubectl apply -f $(K8S_DIR)apps/backend
+
+	$(wait-for-pods)
+	$(print-pods)
+
 deploy: ## Развернуть манифесты в локальном кластере
-	@minikube --profile $(PROFILE) status >/dev/null 2>&1 || $(MAKE) --no-print-directory cluster-up
-	kubectl config use-context $(PROFILE)
-	kubectl apply -f $(K8S_DIR)00-namespace.yaml \
-	              -f $(K8S_DIR)10-secrets.yaml \
-	              -f $(K8S_DIR)infra \
-	              -f $(K8S_DIR)apps \
-	              -f $(K8S_DIR)gateway
-	@echo; echo ">>> Ждём готовности подов (до 5 минут)..."
-	@kubectl -n devgate wait --for=condition=Ready pods --all --timeout=300s || true
-	@echo
-	kubectl -n devgate get pods,svc
-	@echo; echo ">>> Далее: /etc/hosts и 'make -C k8s tunnel' (см. k8s/README.md)"
+	$(check-status-or-cluster-up)
+	$(use-context)
+
+	$(apply-infra)
+	kubectl apply -f $(K8S_DIR)apps/backend \
+				  -f $(K8S_DIR)apps/frontend.yaml
+
+	$(wait-for-pods)
+	$(print-pods)
 
 deploy-remote: ## Деплой на удалённый кластер через kustomize (REGISTRY=... TAG=...)
 	kubectl kustomize --load-restrictor LoadRestrictionsNone $(K8S_DIR)overlays/remote | \
@@ -100,8 +132,9 @@ logs: ## Логи user-service (нужный сервис — напрямую �
 rabbitmq-ui: ## Port-forward RabbitMQ UI → http://localhost:15672
 	kubectl -n devgate port-forward svc/rabbitmq 15672:15672
 
-down: ## Удалить приложение из кластера
-	kubectl delete namespace devgate
+## Удалить приложение из кластера
+down:
+	@kubectl cluster-info >/dev/null 2>&1 && kubectl delete namespace $(PROFILE) --ignore-not-found=true || echo "Кластер недоступен — нечего удалять (minikube остановлен или kubeconfig пуст)"
 
 clean: ## Удалить кластер minikube
-	minikube --profile $(PROFILE) delete
+	-minikube --profile $(PROFILE) delete 2>/dev/null || true

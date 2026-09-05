@@ -19,12 +19,12 @@ resources:
   - ../../10-secrets.yaml
   - ../../infra/postgres.yaml
   - ../../infra/rabbitmq.yaml
-  - ../../apps/user-service.yaml
-  - ../../apps/audit-service.yaml
-  - ../../apps/integration-service.yaml
-  - ../../apps/catalog-service.yaml
-  - ../../apps/scaffolder-service.yaml
-  - ../../apps/notification-service.yaml
+  - ../../apps/backend/user-service.yaml
+  - ../../apps/backend/audit-service.yaml
+  - ../../apps/backend/integration-service.yaml
+  - ../../apps/backend/catalog-service.yaml
+  - ../../apps/backend/scaffolder-service.yaml
+  - ../../apps/backend/notification-service.yaml
   - ../../apps/frontend.yaml
   - ../../gateway/nginx-configmap.yaml
   - ../../gateway/gateway.yaml

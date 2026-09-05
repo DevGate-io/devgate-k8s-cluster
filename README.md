@@ -202,7 +202,7 @@ pull-секрет не нужен).
 
 - Замените все значения в `10-secrets.yaml` (пароль БД, `JWT_SECRET_BASE64`,
   `INTEGRATION_CREDENTIALS_KEY`).
-- У user-service выставите `JWT_COOKIE_SECURE=true` (env в `apps/user-service.yaml`),
+- У user-service выставите `JWT_COOKIE_SECURE=true` (env в `apps/backend/user-service.yaml`),
   если API отдаётся по HTTPS.
 - Ограничьте доступ к API-порту 6443 (фаервол/security group).
 

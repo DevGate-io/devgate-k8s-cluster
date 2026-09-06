@@ -32,6 +32,16 @@ data:
             proxy_pass http://$audit_service:8082$request_uri;
         }
 
+        # SSE-потоки логов пайплайнов нельзя буферизовать — иначе фронт получает
+        # события пачками с большой задержкой.
+        location ~ ^/integrations/[^/]+/pipeline/runs/[^/]+/stream {
+            set $integration_service devgate-integration-service.devgate.svc.cluster.local;
+            proxy_pass http://$integration_service:8083$request_uri;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_read_timeout 3600s;
+        }
+
         location ~ ^/integrations {
             set $integration_service devgate-integration-service.devgate.svc.cluster.local;
             proxy_pass http://$integration_service:8083$request_uri;

@@ -57,7 +57,35 @@ define apply-infra
 endef
 
 .PHONY: help cluster-up cluster-down build build-local push deploy deploy-remote \
-	tunnel status logs rabbitmq-ui down clean deploy-backend
+	tunnel status logs rabbitmq-ui down clean deploy-backend seed build-service restart
+
+build-service: ## Собрать jar и docker-образ одного сервиса (SERVICE=user-service|frontend)
+ifndef SERVICE
+	$(error SERVICE не задан. Пример: make build-service SERVICE=user-service)
+endif
+	@minikube --profile $(PROFILE) status >/dev/null 2>&1 || $(MAKE) --no-print-directory cluster-up
+	@eval $$(minikube --profile $(PROFILE) docker-env); \
+	svc_dir="devgate-$(SERVICE)"; \
+	if [ "$(SERVICE)" = "frontend" ]; then \
+		echo "=== devgate-frontend ==="; \
+		docker build -t devgate/frontend:local \
+			-f $(K8S_DIR)images/frontend.Dockerfile $(ROOT)/devgate-frontend; \
+	else \
+		echo "=== $$svc_dir ==="; \
+		(cd $(ROOT)/$$svc_dir && ./gradlew bootJar -x test --quiet); \
+		docker build --build-arg JAR_FILE=build/libs/$(SERVICE).jar \
+			-t devgate/$(SERVICE):local \
+			-f $(K8S_DIR)images/spring-service.Dockerfile $(ROOT)/$$svc_dir; \
+	fi; \
+	echo; echo "Готово:"; docker images | grep "devgate/$(SERVICE):local"
+
+restart: ## Перезапустить под сервиса (SERVICE=user-service|frontend)
+ifndef SERVICE
+	$(error SERVICE не задан. Пример: make restart SERVICE=user-service)
+endif
+	$(call use-context)
+	kubectl rollout restart deployment/devgate-$(SERVICE) -n devgate
+	kubectl rollout status deployment/devgate-$(SERVICE) -n devgate
 
 help: ## Список целей
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(K8S_DIR)Makefile | \
@@ -115,6 +143,9 @@ deploy: ## Развернуть манифесты в локальном кла�
 
 	$(wait-for-pods)
 	$(print-pods)
+
+seed: ## Создать первого админа в k8s кластере (MODE=k8s)
+	$(ROOT)/devgate-user-service/docker/seed-admin.sh --k8s
 
 deploy-remote: ## Деплой на удалённый кластер через kustomize (REGISTRY=... TAG=...)
 	kubectl kustomize --load-restrictor LoadRestrictionsNone $(K8S_DIR)overlays/remote | \

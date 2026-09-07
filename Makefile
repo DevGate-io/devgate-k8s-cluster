@@ -57,7 +57,7 @@ define apply-infra
 endef
 
 .PHONY: help cluster-up cluster-down build build-local push deploy deploy-remote \
-	tunnel status logs rabbitmq-ui down clean deploy-backend seed build-service restart
+	tunnel status logs rabbitmq-ui dashboard down clean deploy-backend seed build-service restart
 
 build-service: ## Собрать jar и docker-образ одного сервиса (SERVICE=user-service|frontend)
 ifndef SERVICE
@@ -162,6 +162,36 @@ logs: ## Логи user-service (нужный сервис — напрямую �
 
 rabbitmq-ui: ## Port-forward RabbitMQ UI → http://localhost:15672
 	kubectl -n devgate port-forward svc/rabbitmq 15672:15672
+
+dashboard: ## Поднять Kubernetes Dashboard и вывести URL + токен
+	$(check-status-or-cluster-up)
+	$(use-context)
+	@echo ">>> Создаём namespace kubernetes-dashboard..."
+	@kubectl get ns kubernetes-dashboard >/dev/null 2>&1 || \
+		kubectl create ns kubernetes-dashboard
+	@echo ">>> Создаём admin-user ServiceAccount..."
+	@kubectl -n kubernetes-dashboard get sa admin-user >/dev/null 2>&1 || \
+		kubectl -n kubernetes-dashboard create serviceaccount admin-user
+	@echo ">>> Назначаем cluster-admin..."
+	@kubectl get clusterrolebinding admin-user >/dev/null 2>&1 || \
+		kubectl create clusterrolebinding admin-user \
+			--clusterrole=cluster-admin \
+			--serviceaccount=kubernetes-dashboard:admin-user
+	@echo ">>> Запускаем dashboard proxy..."
+	@minikube --profile $(PROFILE) dashboard --url 2>/dev/null | while read url; do \
+		echo; \
+		echo "========================================"; \
+		echo "  Kubernetes Dashboard"; \
+		echo "========================================"; \
+		echo; \
+		echo "  URL:   $$url"; \
+		echo; \
+		echo "  Токен:"; \
+		echo "  $$(kubectl -n kubernetes-dashboard create token admin-user 2>/dev/null)"; \
+		echo; \
+		echo "  Вставь токен при входе → Token"; \
+		echo "========================================"; \
+	done
 
 ## Удалить приложение из кластера
 down:
